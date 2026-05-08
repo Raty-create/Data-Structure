@@ -15,8 +15,12 @@ typedef struct {
 typedef struct {
 	int maxBlack;
 	int maxWhite;
-	int startIdxBlack;
-	int startIdxWhite;
+
+	int startIdxBlack[ROW];
+	int startIdxWhite[ROW];
+
+	int blackGroupCount;
+	int whiteGroupCount;
 } Sequence;
 
 void printBoard(char board[ROW][COL]) {
@@ -91,14 +95,28 @@ Sequence analyzeMaxSequence(char board[], int length) {
 		if (board[i] == currentStone)
 			currentCount++;
 		else {
-			if (currentStone == '@' && currentCount > maxBlack) {
-				maxBlack = currentCount;
-				TheMostStone.startIdxBlack = currentStart;
+			if (currentStone == '@') {
+				if (currentCount > maxBlack) {
+					maxBlack = currentCount;
+
+					TheMostStone.blackGroupCount = 0;
+
+					TheMostStone.startIdxBlack[TheMostStone.blackGroupCount++] = currentStart;
+				}
+				else if (currentCount == maxBlack)
+					TheMostStone.startIdxBlack[TheMostStone.blackGroupCount++] = currentStart;
 			}
 
-			if (currentStone == 'o' && currentCount > maxWhite) {
-				maxWhite = currentCount;
-				TheMostStone.startIdxWhite = currentStart;
+			if (currentStone == 'o') {
+				if (currentCount > maxWhite) {
+					maxWhite = currentCount;
+
+					TheMostStone.whiteGroupCount = 0;
+
+					TheMostStone.startIdxWhite[TheMostStone.whiteGroupCount++] = currentStart;
+				}
+				else if (currentCount == maxWhite)
+					TheMostStone.startIdxWhite[TheMostStone.whiteGroupCount++] = currentStart;
 			}
 
 			currentStone = board[i];
@@ -111,14 +129,28 @@ Sequence analyzeMaxSequence(char board[], int length) {
 			}
 		}
 	}
-	if (currentStone == '@' && currentCount > maxBlack) {
-		maxBlack = currentCount;
-		TheMostStone.startIdxBlack = currentStart;
+	if (currentStone == '@') {
+		if (currentCount > maxBlack) {
+			maxBlack = currentCount;
+
+			TheMostStone.blackGroupCount = 0;
+
+			TheMostStone.startIdxBlack[TheMostStone.blackGroupCount++] = currentStart;
+		}
+		else if (currentCount == maxBlack)
+			TheMostStone.startIdxBlack[TheMostStone.blackGroupCount++] = currentStart;
 	}
 
-	if (currentStone == 'o' && currentCount > maxWhite) {
-		maxWhite = currentCount;
-		TheMostStone.startIdxWhite = currentStart;
+	if (currentStone == 'o') {
+		if (currentCount > maxWhite) {
+			maxWhite = currentCount;
+
+			TheMostStone.whiteGroupCount = 0;
+
+			TheMostStone.startIdxWhite[TheMostStone.whiteGroupCount++] = currentStart;
+		}
+		else if (currentCount == maxWhite)
+			TheMostStone.startIdxWhite[TheMostStone.whiteGroupCount++] = currentStart;
 	}
 
 	TheMostStone.maxBlack = maxBlack;
@@ -266,6 +298,8 @@ void printDiagonalMax(Sequence RightDiaMax[], Sequence LeftDiaMax[]) {
 }
 
 void printRowsMaxXY(Sequence rowsMaxXY[]) {
+	int g, x, start;
+
 	for (int i = 0; i < ROW; i++) {
 		printf("%2d번째 가로줄 -> ", i + 1);
 
@@ -273,22 +307,50 @@ void printRowsMaxXY(Sequence rowsMaxXY[]) {
 			printf("연속된 돌 없음");
 		else if (rowsMaxXY[i].maxBlack > rowsMaxXY[i].maxWhite) {
 			printf("@: ");
-			for (int x = rowsMaxXY[i].startIdxBlack; x < rowsMaxXY[i].startIdxBlack + rowsMaxXY[i].maxBlack; x++)
-				printf("(%d, %d) ", x, i);
+			for (g = 0; g < rowsMaxXY[i].blackGroupCount; g++) {
+				start = rowsMaxXY[i].startIdxBlack[g];
+
+				for (x = start; x < start + rowsMaxXY[i].maxBlack; x++)
+					printf("(%d, %d)", x, i);
+				
+				if (g != rowsMaxXY[i].blackGroupCount - 1)
+					printf(" / ");
+			}
 		}
 		else if (rowsMaxXY[i].maxWhite > rowsMaxXY[i].maxBlack) {
 			printf("o: ");
-			for (int x = rowsMaxXY[i].startIdxWhite; x < rowsMaxXY[i].startIdxWhite + rowsMaxXY[i].maxWhite; x++)
-				printf("(%d, %d) ", x, i);
+			for (g = 0; g < rowsMaxXY[i].whiteGroupCount; g++) {
+				start = rowsMaxXY[i].startIdxWhite[g];
+
+				for (x = start; x < start + rowsMaxXY[i].maxWhite; x++)
+					printf("(%d, %d)", x, i);
+
+				if (g != rowsMaxXY[i].whiteGroupCount - 1)
+					printf(" / ");
+			}
 		}
 		else {
 			printf("@: ");
-			for (int x = rowsMaxXY[i].startIdxBlack; x < rowsMaxXY[i].startIdxBlack + rowsMaxXY[i].maxBlack; x++)
-				printf("(%d, %d) ", x, i);
+			for (g = 0; g < rowsMaxXY[i].blackGroupCount; g++) {
+				start = rowsMaxXY[i].startIdxBlack[g];
+
+				for (x = start; x < start + rowsMaxXY[i].maxBlack; x++)
+					printf("(%d, %d)", x, i);
+
+				if (g != rowsMaxXY[i].blackGroupCount - 1)
+					printf(" / ");
+			}
 
 			printf("o: ");
-			for (int x = rowsMaxXY[i].startIdxWhite; x < rowsMaxXY[i].startIdxWhite + rowsMaxXY[i].maxWhite; x++)
-				printf("(%d, %d) ", x, i);
+			for (g = 0; g < rowsMaxXY[i].whiteGroupCount; g++) {
+				start = rowsMaxXY[i].startIdxWhite[g];
+
+				for (x = start; x < start + rowsMaxXY[i].maxWhite; x++)
+					printf("(%d, %d)", x, i);
+
+				if (g != rowsMaxXY[i].whiteGroupCount - 1)
+					printf(" / ");
+			}
 		}
 
 		printf("\n");
