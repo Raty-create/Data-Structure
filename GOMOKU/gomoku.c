@@ -3,12 +3,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
+#include <conio.h>
 
+#define SAVE_FILE "gomoku_save.txt"
 #define SIZE 100
 #define ROW 19
 #define COL 19
 #define COUNT(arr) (sizeof(arr) / sizeof(arr[0]))
 #define MAX_PATTERN 19
+
+// 무르기 기능을 사용하기 위해 돌을 놓은 좌표를 스택에 저장
+#define MAX_MOVES (ROW * COL)
+int undoHistory[MAX_MOVES][2];
+int undoCount = 0;
+
+// 무르기를 할 경우 그때의 돌 좌표 스택에 저장
+int redoHistory[MAX_MOVES][2];
+int redoCount = 0;
 
 typedef struct { int black, white; } Stone;
 
@@ -794,6 +805,8 @@ static int readInt(int low, int high) {
 	int val;
 
 	if (fgets(buf, sizeof(buf), stdin) == NULL) return 0;
+	if (buf[0] == 'u' || buf[0] == 'U') return -999;
+	if (buf[0] == 'r' || buf[0] == 'R') return -998;
 	if (sscanf(buf, "%d %c", &val, &extra) != 1) return 0;
 	return (val >= low && val <= high) ? val : 0;
 }
@@ -824,6 +837,11 @@ static void handlePlaceStone(char board[][COL], int* turn, int* countBlack, int*
 	else {
 		board[inputY][inputX] = 'o'; (*countWhite)++;
 	}
+
+	undoHistory[undoCount][0] = inputX;
+	undoHistory[undoCount][1] = inputY;
+	undoCount++;
+
 	(*turn)++;
 
 	if (*countBlack + *countWhite == ROW * COL) {
@@ -902,6 +920,188 @@ static void handleAnalyzeMenu(char board[][COL]) {
 	system("pause");
 }
 
+// 현재 게임 상태를 txt 파일로 저장
+void saveGame(char board[ROW][COL], int turn, int countBlack, int countWhite) {
+	FILE* file = fopen(SAVE_FILE, "w");
+	if (file == NULL) {
+		printf("저장 실패: 파일을 열 수 없습니다.\n");
+		Sleep(3000);
+		return;
+	}
+
+	// 차례, 돌 개수 정보 저장
+	fprintf(file, "%d %d %d\n", turn, countBlack, countWhite);
+
+	// 판 정보 저장
+	for (int y = 0; y < ROW; y++) {
+		for (int x = 0; x < COL; x++) {
+			fprintf(file, "%c", board[y][x]);
+		}
+		fprintf(file, "\n");
+	}
+
+	// undo 정보 저장
+	fprintf(file, "%d\n", undoCount);
+	for (int i = 0; i < undoCount; i++) fprintf(file, "%d %d\n", undoHistory[i][0], undoHistory[i][1]);
+
+	// redo 정보 저장
+	fprintf(file, "%d\n", redoCount);
+	for (int i = 0; i < redoCount; i++) fprintf(file, "%d %d\n", redoHistory[i][0], redoHistory[i][1]);
+
+	fclose(file);
+	printf("게임이 저장되었습니다.");
+	Sleep(3000);
+}
+
+// 저장한 게임 상태를 txt 파일에서 로드
+int loadGame(char board[ROW][COL], int* turn, int* countBlack, int* countWhite) {
+	FILE* file = fopen(SAVE_FILE, "r");
+	if (file == NULL) {
+		printf("저장된 게임이 없습니다.");
+		Sleep(3000);
+		return 0;
+	}
+
+	// 차례, 돌 개수 정보 로드
+	if (fscanf(file, "%d %d %d\n", turn, countBlack, countWhite) != 3) {
+		printf("파일을 읽을 수 없습니다.");
+		fclose(file);
+		Sleep(3000);
+		return 0;
+	}
+
+	// 판 정보 로드
+	for (int y = 0; y < ROW; y++) {
+		for (int x = 0; x < COL; x++) {
+			int ch = fgetc(file);
+			if (ch == '\n' || ch == EOF) {
+				x--;
+				continue;
+			}
+			board[y][x] = (char)ch;
+		}
+	}
+
+	// undo 정보 로드
+	if (fscanf(file, "%d\n", &undoCount) != 1) {
+		printf("무르기 정보를 읽을 수 없습니다.");
+		Sleep(3000);
+		return 0;
+	}
+
+	for (int i = 0; i < undoCount; i++) {
+		if (fscanf(file, "%d %d\n", &undoHistory[i][0], &undoHistory[i][1]) != 2) {
+			printf("무르기 정보 로드 실패");
+			fclose(file);
+			Sleep(3000);
+			return 0;
+		}
+	}
+
+	// redo 정보 로드
+	if (fscanf(file, "%d\n", &redoCount) != 1) {
+		printf("무르기 취소 정보를 읽을 수 없습니다.");
+		Sleep(3000);
+		return 0;
+	}
+
+	for (int i = 0; i < redoCount; i++) {
+		if (fscanf(file, "%d %d\n", &redoHistory[i][0], &redoHistory[i][1]) != 2) {
+			printf("무르기 취소 정보 로드 실패");
+			fclose(file);
+			Sleep(3000);
+			return 0;
+		}
+	}
+
+	fclose(file);
+	printf("게임 로드 중...");
+	Sleep(3000);
+	return 1;
+}
+
+// 저장된 게임이 있는지 체크
+int isSaveFileExists() {
+	FILE* file = fopen(SAVE_FILE, "r");
+	if (file == NULL) return 0; // 파일 없음
+	fclose(file);
+
+	return 1; // 파일 있음
+}
+
+// 저장된 게임 삭제
+void deleteSaveFile() {
+	if (remove(SAVE_FILE) == 0) {
+		printf("삭제 완료!");
+		Sleep(3000);
+	}
+	else {
+		printf("삭제 실패(저장된 게임이 없음)");
+		Sleep(3000);
+	}
+}
+
+// 무르기
+void  undoMove(char board[ROW][COL], int* turn, int* countBlack, int* countWhite) {
+	if (*turn == 0 || undoCount == 0) {
+		printf("무를 수 있는 수가 없습니다.");
+		Sleep(3000);
+		return;
+	}
+
+	int lastIdx = undoCount - 1;
+	int x = undoHistory[lastIdx][0];
+	int y = undoHistory[lastIdx][1];
+
+	board[y][x] = '+';
+	undoCount--;
+
+	if (*turn % 2 == 0) (*countWhite)--;
+	else (*countBlack)--;
+
+	(*turn)--;
+
+	// 어떤 돌을 물렀는지 스택에 저장
+	redoHistory[redoCount][0] = x;
+	redoHistory[redoCount][1] = y;
+	redoCount++;
+
+	printf("무르기 완료!");
+	Sleep(3000);
+}
+
+// 무르기 취소
+void redoMove(char board[ROW][COL], int* turn, int* countBlack, int* countWhite) {
+	if (redoCount == 0) {
+		printf("무르기를 취소할 수 있는 돌이 없습니다.");
+		Sleep(3000);
+		return;
+	}
+
+	int lastIdx = redoCount - 1;
+	int x = redoHistory[lastIdx][0];
+	int y = redoHistory[lastIdx][1];
+
+	if (*turn % 2 == 0) {
+		board[y][x] = '@';
+		(*countBlack)++;
+	}
+	else {
+		board[y][x] = 'o';
+		(*countWhite)++;
+	}
+
+	redoCount--;
+	(*turn)++;
+
+	undoHistory[undoCount][0] = x;
+	undoHistory[undoCount][1] = y;
+	undoCount++;
+
+	printf("무르기 취소 완료!");
+	Sleep(3000);
+}
+
 int main() {
 	char board[ROW][COL];
 	int turn = 0, countBlack = 0, countWhite = 0;
@@ -911,7 +1111,17 @@ int main() {
 			board[i][j] = '+';
 	}
 
-	const char* printFirstMenu[] = { "종료", "돌 놓기", "개수 확인" };
+	if (isSaveFileExists()) {
+		printf("저장된 게임이 있습니다.\n");
+		printf("1. 새 게임 시작\n");
+		printf("2. 저장된 게임 로드\n");
+		printf("선택 (1 or 2): ");
+
+		int choice = readInt(1, 2);
+		if (choice == 2) loadGame(board, &turn, &countBlack, &countWhite);
+	}
+
+	const char* printFirstMenu[] = { "종료", "돌 놓기", "개수 확인", "게임 저장", "게임 로드", "저장 삭제", };
 
 	while (1) {
 		static Sequence rowT[ROW], colT[COL];
@@ -924,23 +1134,41 @@ int main() {
 		printBoardHighlight(board, NULL, 0, NULL, 0, rowT, ROW, colT, COL, rightDiaT, ROW + COL - 1, leftDiaT, ROW + COL - 1, turn);
 
 		for (int i = 0; i < (int)COUNT(printFirstMenu); i++)
-			printf("%d. %s\n", i, printFirstMenu[i]);
-		printf("원하시는 옵션의 숫자를 입력해주세요: ");
+			printf("%d. %s\n", i + 1, printFirstMenu[i]);
+		printf("원하시는 옵션의 숫자를 입력해주세요 (무르기: U / 무르기 취소: R): ");
 
-		int firstNum = readInt(0, (int)COUNT(printFirstMenu) - 1);
-		if (firstNum < 0) {
+		int firstNum = readInt(1, (int)COUNT(printFirstMenu));
+		if (firstNum == -999) {
+			undoMove(board, &turn, &countBlack, &countWhite);
+			continue;
+		}
+		if (firstNum == -998) {
+			redoMove(board, &turn, &countBlack, &countWhite);
+			continue;
+		}
+
+		if (firstNum == 0) {
 			printf("없는 옵션입니다."); Sleep(3000); continue;
 		}
 
 		switch (firstNum) {
-		case 0:
+		case 1:
 			printf("\n프로그램 종료\n");
 			return 0;
-		case 1:
+		case 2:
 			handlePlaceStone(board, &turn, &countBlack, &countWhite);
 			break;
-		case 2:
+		case 3:
 			handleAnalyzeMenu(board);
+			break;
+		case 4:
+			saveGame(board, turn, countBlack, countWhite);
+			break;
+		case 5:
+			loadGame(board, &turn, &countBlack, &countWhite);
+			break;
+		case 6:
+			deleteSaveFile();
 			break;
 		}
 	}
